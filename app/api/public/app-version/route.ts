@@ -22,7 +22,18 @@ export async function GET(request: Request) {
     const appVersion = String(searchParams.get("version") || "");
     const platform = String(searchParams.get("platform") || "").toLowerCase();
 
-    const config = await AppVersionConfig.findOne({ key: "mobile" }).lean();
+    const config = await AppVersionConfig.findOne({ key: "mobile" })
+      .select(
+        "minRequiredVersion latestVersion message defaultUrl androidUrl iosUrl"
+      )
+      .lean<{
+        minRequiredVersion?: string;
+        latestVersion?: string;
+        message?: string;
+        defaultUrl?: string;
+        androidUrl?: string;
+        iosUrl?: string;
+      }>();
     if (!config) {
       return NextResponse.json({ success: true, forceUpdate: false, hasUpdate: false });
     }

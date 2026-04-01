@@ -18,7 +18,15 @@ export async function POST(request: Request) {
       );
     }
 
-    const admin = await AdminAuth.findOne({ username }).lean();
+    const admin = await AdminAuth.findOne({ username })
+      .select("_id username name active passwordHash")
+      .lean<{
+        _id: unknown;
+        username: string;
+        name?: string;
+        active: boolean;
+        passwordHash: string;
+      }>();
     if (!admin || !admin.active) {
       return NextResponse.json({ success: false, message: "Invalid credentials" }, { status: 401 });
     }

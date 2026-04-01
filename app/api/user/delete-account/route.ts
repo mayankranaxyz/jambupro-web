@@ -24,7 +24,9 @@ export async function DELETE(request: Request) {
     }
 
     const oid = new mongoose.Types.ObjectId(userId);
-    const user = await User.findById(oid).lean();
+    const user = await User.findById(oid)
+      .select("phone")
+      .lean<{ phone?: string }>();
     if (!user) {
       return NextResponse.json(
         { success: false, message: "User not found" },
