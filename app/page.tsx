@@ -40,12 +40,6 @@ export default function Home() {
           >
             Delete Account
           </Link>
-          <Link
-            href="/admin/login"
-            className="inline-block rounded-lg border border-zinc-400 px-5 py-2 text-sm text-black transition hover:opacity-80 dark:border-zinc-600 dark:text-white"
-          >
-            Admin Panel
-          </Link>
         </div>
       </div>
     </main>
