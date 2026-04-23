@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import { NextResponse } from "next/server";
 import { connectDb } from "@/lib/server/db";
-import { Lead } from "@/lib/server/models";
+import { Lead, User } from "@/lib/server/models";
 import { resolveUserId } from "@/lib/server/userContext";
 
 function leadToApp(doc: InstanceType<typeof Lead>) {
@@ -30,7 +30,22 @@ export async function GET(request: Request) {
       );
     }
 
-    const leads = await Lead.find({ userId: new mongoose.Types.ObjectId(userId) }).lean();
+    const me = (await User.findById(userId)
+      .select({ userType: 1, organizationId: 1 })
+      .lean()
+      .exec()) as unknown as { userType?: unknown; organizationId?: unknown } | null;
+    const myType = String(me?.userType || "");
+    const oid = new mongoose.Types.ObjectId(userId);
+
+    // Individual: own leads (existing behavior).
+    // Organization: org-owned leads (userId = orgId).
+    // Org employee: assigned leads (assignedTo = employeeId).
+    const filter =
+      myType === "organization_employee"
+        ? { assignedTo: oid }
+        : { userId: oid };
+
+    const leads = await Lead.find(filter).lean();
     const mapped = leads.map((l) => ({
       id: l.clientId,
       name: l.name,
@@ -65,21 +80,73 @@ export async function PUT(request: Request) {
     const leads = Array.isArray(body.leads) ? body.leads : [];
     const oid = new mongoose.Types.ObjectId(userId);
 
-    await Lead.deleteMany({ userId: oid });
+    const me = (await User.findById(userId)
+      .select({ userType: 1 })
+      .lean()
+      .exec()) as unknown as { userType?: unknown } | null;
+    const myType = String(me?.userType || "");
 
-    if (leads.length > 0) {
-      const docs = leads.map((l: Record<string, unknown>) => ({
+    // Org employees should not overwrite org-wide CRM store.
+    if (myType === "organization_employee") {
+      return NextResponse.json(
+        { success: false, message: "Org employee cannot overwrite CRM leads. Ask organization to manage." },
+        { status: 403 }
+      );
+    }
+
+    // Organization: upsert-by-clientId to preserve assignments; then delete removed ones.
+    if (myType === "organization") {
+      const clientIds = leads
+        .map((l: Record<string, unknown>) => l.id ?? l.clientId)
+        .filter((x: unknown) => x != null);
+
+      if (leads.length > 0) {
+        const ops = leads.map((l: Record<string, unknown>) => {
+          const clientId = (l.id ?? l.clientId ?? Date.now()) as never;
+          const createdAt = typeof l.createdAt === "number" ? l.createdAt : Date.now();
+          return {
+            updateOne: {
+              filter: { userId: oid, clientId },
+              update: {
+                $set: {
+                  name: String(l.name || ""),
+                  phone: String(l.phone || ""),
+                  property: String(l.property || ""),
+                  notes: String(l.notes || ""),
+                  followUp: String(l.followUp || ""),
+                  status: String(l.status || "New"),
+                  createdAt,
+                },
+                $setOnInsert: { userId: oid, clientId },
+              },
+              upsert: true,
+            },
+          };
+        });
+        await Lead.bulkWrite(ops, { ordered: false });
+      }
+
+      await Lead.deleteMany({
         userId: oid,
-        clientId: l.id ?? l.clientId ?? Date.now(),
-        name: String(l.name || ""),
-        phone: String(l.phone || ""),
-        property: String(l.property || ""),
-        notes: String(l.notes || ""),
-        followUp: String(l.followUp || ""),
-        status: String(l.status || "New"),
-        createdAt: typeof l.createdAt === "number" ? l.createdAt : Date.now(),
-      }));
-      await Lead.insertMany(docs);
+        ...(clientIds.length ? { clientId: { $nin: clientIds } } : {}),
+      });
+    } else {
+      // Individual (default): legacy replace-all semantics.
+      await Lead.deleteMany({ userId: oid });
+      if (leads.length > 0) {
+        const docs = leads.map((l: Record<string, unknown>) => ({
+          userId: oid,
+          clientId: l.id ?? l.clientId ?? Date.now(),
+          name: String(l.name || ""),
+          phone: String(l.phone || ""),
+          property: String(l.property || ""),
+          notes: String(l.notes || ""),
+          followUp: String(l.followUp || ""),
+          status: String(l.status || "New"),
+          createdAt: typeof l.createdAt === "number" ? l.createdAt : Date.now(),
+        }));
+        await Lead.insertMany(docs);
+      }
     }
 
     const saved = await Lead.find({ userId: oid });

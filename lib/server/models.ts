@@ -5,6 +5,7 @@ const userSchema = new Schema(
     phone: { type: String, required: true, unique: true, index: true },
     role: { type: String, enum: ["user", "admin"], default: "user" },
     userType: String,
+    organizationId: { type: Schema.Types.ObjectId, ref: "User", default: null },
     name: String,
     email: String,
     profilePic: String,
@@ -19,6 +20,10 @@ const userSchema = new Schema(
     pincode: String,
     country: { type: String, default: "India" },
     registeredAt: { type: Date, default: Date.now },
+    // Operational status (optional; safe for existing DBs).
+    disabled: { type: Boolean, default: false, index: true },
+    lastLoginAt: { type: Date, default: null, index: true },
+    notes: { type: String, default: "" },
   },
   { timestamps: true }
 );
@@ -27,6 +32,10 @@ const otpPendingSchema = new Schema(
   {
     phone: { type: String, required: true, index: true },
     sessionId: { type: String, required: true },
+    otpHash: { type: String, default: "" },
+    pendingUserType: { type: String, default: "" },
+    pendingOrganizationId: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    pendingCompanyName: { type: String, default: "" },
     lastSentAt: { type: Date, default: Date.now },
     sendCount: { type: Number, default: 1 },
     verifyAttempts: { type: Number, default: 0 },
@@ -39,6 +48,8 @@ otpPendingSchema.index({ createdAt: 1 }, { expireAfterSeconds: 600 });
 const leadSchema = new Schema(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    // For organization leads, this points to the employee user who owns the work.
+    assignedTo: { type: Schema.Types.ObjectId, ref: "User", default: null, index: true },
     clientId: { type: Schema.Types.Mixed, required: true },
     name: String,
     phone: String,
@@ -46,6 +57,23 @@ const leadSchema = new Schema(
     notes: String,
     followUp: String,
     status: { type: String, default: "New" },
+    lastActivityAt: { type: Date, default: null, index: true },
+    lastActivityBy: { type: Schema.Types.ObjectId, ref: "User", default: null, index: true },
+    lastStatusUpdatedAt: { type: Date, default: null, index: true },
+    lastStatusUpdatedBy: { type: Schema.Types.ObjectId, ref: "User", default: null, index: true },
+    activity: {
+      type: [
+        {
+          type: { type: String, default: "update" }, // "status" | "note" | "followUp" | "assign" | "update"
+          at: { type: Date, default: Date.now },
+          by: { type: Schema.Types.ObjectId, ref: "User", default: null },
+          fromStatus: { type: String, default: "" },
+          toStatus: { type: String, default: "" },
+          note: { type: String, default: "" },
+        },
+      ],
+      default: [],
+    },
     createdAt: { type: Number, default: () => Date.now() },
   },
   { timestamps: true }
@@ -152,6 +180,7 @@ export function serializeUser(doc: InstanceType<typeof User>) {
     phone: u.phone,
     role: u.role,
     userType: u.userType || "",
+    organizationId: u.organizationId ? String(u.organizationId) : "",
     name: u.name || "",
     email: u.email || "",
     profilePic: u.profilePic || "",
@@ -165,6 +194,11 @@ export function serializeUser(doc: InstanceType<typeof User>) {
     state: u.state || "",
     pincode: u.pincode || "",
     country: u.country || "India",
+    disabled: Boolean(u.disabled),
+    lastLoginAt: u.lastLoginAt ? new Date(u.lastLoginAt).toISOString() : "",
+    createdAt: u.createdAt ? new Date(u.createdAt).toISOString() : "",
+    updatedAt: u.updatedAt ? new Date(u.updatedAt).toISOString() : "",
+    notes: u.notes || "",
   };
 }
 

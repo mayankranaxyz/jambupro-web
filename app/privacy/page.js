@@ -19,12 +19,20 @@ export default function PrivacyPolicy() {
         <ul>
           <li>We use your mobile number for OTP-based login.</li>
           <li>
+            You may use the app as an Individual user, Organization, or Organization Employee. Some
+            features (like employee team management) depend on the selected user type.
+          </li>
+          <li>
             The app can store data locally for offline use and can sync certain data to our
             servers for backup/continuity.
           </li>
           <li>
             If you upload images (profile/company logo), they are stored on Cloudinary and we
             store the image URL in our database.
+          </li>
+          <li>
+            If you import leads from your phone contacts, we access contacts only after you grant
+            permission and only to help you create CRM leads.
           </li>
           <li>We do not sell your personal data.</li>
         </ul>
@@ -35,7 +43,21 @@ export default function PrivacyPolicy() {
           <li>Mobile number (for registration and OTP login)</li>
           <li>Profile details (name, email, user type, address, business details)</li>
           <li>CRM contacts/leads you add or import (name, phone, notes, follow-up, status)</li>
+          <li>
+            Organization/employee relationships (for example, which organization an employee
+            belongs to, and which leads are assigned to which employee)
+          </li>
           <li>Support messages when you contact us</li>
+        </ul>
+
+        <h3>Device permissions (optional)</h3>
+        <ul>
+          <li>
+            Contacts: used to import phonebook entries into your CRM (optional, requires consent)
+          </li>
+          <li>
+            Photos/Media: used to pick profile pictures and company logos (optional)
+          </li>
         </ul>
 
         <h3>Images</h3>
@@ -49,6 +71,7 @@ export default function PrivacyPolicy() {
           <li>To authenticate users and prevent misuse (OTP login)</li>
           <li>To save and sync your profile and CRM data</li>
           <li>To provide app features such as calculators, CRM, and visiting card tools</li>
+          <li>To enable organization features like employee lead assignment and activity tracking</li>
           <li>To provide customer support</li>
         </ul>
 
@@ -67,6 +90,7 @@ export default function PrivacyPolicy() {
         <ul>
           <li>OTP SMS provider (to send/verify OTP)</li>
           <li>Cloudinary (to host uploaded images)</li>
+          <li>Cloud hosting/database providers (to store and serve your account/profile/CRM data)</li>
         </ul>
 
         <h2>6) Data retention</h2>
@@ -84,6 +108,7 @@ export default function PrivacyPolicy() {
         <h2>8) Your choices</h2>
         <ul>
           <li>You can update your profile information from within the app.</li>
+          <li>You can control whether CRM contacts/leads are synced by granting/withholding consent.</li>
           <li>You can log out or remove the account from your device to clear local session data.</li>
           <li>
             You can request permanent deletion by following the instructions on the{" "}

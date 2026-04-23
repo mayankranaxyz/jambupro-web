@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { connectDb } from "@/lib/server/db";
 import { adminPhones, OtpPending, User, serializeUser } from "@/lib/server/models";
 import { signUserToken } from "@/lib/server/jwt";
-import { verifySmsOtp } from "@/lib/server/twoFactor";
+import { hashOtp } from "@/lib/server/twoFactor";
 
 export async function POST(request: Request) {
   try {
@@ -11,9 +11,9 @@ export async function POST(request: Request) {
     const phone = String(body.phone || "").replace(/\D/g, "").slice(-10);
     const otp = String(body.otp || "");
     const testBypassPhone = process.env.TEST_BYPASS_PHONE || "9999999999";
-    const testBypassOtp = process.env.TEST_BYPASS_OTP || "999999";
+    const testBypassOtp = process.env.TEST_BYPASS_OTP || "9999";
 
-    if (phone.length !== 10 || otp.length !== 6) {
+    if (phone.length !== 10 || otp.length !== 4) {
       return NextResponse.json(
         { success: false, message: "Invalid phone or OTP" },
         { status: 400 }
@@ -21,11 +21,33 @@ export async function POST(request: Request) {
     }
 
     if (phone === testBypassPhone && otp === testBypassOtp) {
+      const pending = await OtpPending.findOne({ phone }).sort({ createdAt: -1 });
       await OtpPending.deleteMany({ phone });
+
+      const admins = adminPhones();
+      const role = admins.has(phone) ? "admin" : "user";
+
+      const pendingUserType = String(pending?.pendingUserType || "").trim();
+      const pendingCompanyName = String(pending?.pendingCompanyName || "").trim();
+      const pendingOrganizationId = pending?.pendingOrganizationId || null;
+
       let user = await User.findOne({ phone });
-      if (!user) {
-        user = await User.create({ phone, role: "user" });
+      if (!user) user = await User.create({ phone, role });
+
+      if (role === "admin" && user.role !== "admin") user.role = "admin";
+      if (pendingUserType) user.userType = pendingUserType;
+      if (pendingUserType === "organization" && pendingCompanyName) {
+        user.companyName = pendingCompanyName;
+        user.organizationId = null;
+      } else if (pendingUserType === "organization_employee") {
+        user.organizationId = pendingOrganizationId;
+        if (pendingCompanyName) user.companyName = pendingCompanyName;
+      } else if (pendingUserType === "individual") {
+        user.organizationId = null;
       }
+      user.lastLoginAt = new Date();
+      await user.save();
+
       const token = signUserToken(user);
       return NextResponse.json({
         success: true,
@@ -55,7 +77,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const ok = await verifySmsOtp(pending.sessionId, otp);
+    const ok = pending.otpHash && hashOtp(otp) === String(pending.otpHash);
     if (!ok) {
       const attempts = Number(pending.verifyAttempts || 0) + 1;
       const lock = attempts >= 5 ? new Date(Date.now() + 5 * 60 * 1000) : null;
@@ -86,9 +108,27 @@ export async function POST(request: Request) {
     } else {
       if (role === "admin") {
         user.role = "admin";
-        await user.save();
       }
     }
+
+    // Apply pending registration details only after successful OTP verification.
+    const pendingUserType = String(pending.pendingUserType || "").trim();
+    const pendingCompanyName = String(pending.pendingCompanyName || "").trim();
+    const pendingOrganizationId = pending.pendingOrganizationId || null;
+
+    if (pendingUserType) user.userType = pendingUserType;
+    if (pendingUserType === "organization") {
+      if (pendingCompanyName) user.companyName = pendingCompanyName;
+      user.organizationId = null;
+    } else if (pendingUserType === "organization_employee") {
+      user.organizationId = pendingOrganizationId;
+      if (pendingCompanyName) user.companyName = pendingCompanyName;
+    } else if (pendingUserType === "individual") {
+      user.organizationId = null;
+    }
+
+    user.lastLoginAt = new Date();
+    await user.save();
 
     const token = signUserToken(user);
 
