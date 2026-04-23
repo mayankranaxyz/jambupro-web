@@ -53,6 +53,7 @@ export async function PUT(request: Request) {
     const explicit = body.userId != null ? String(body.userId) : null;
     const { userId, error } = resolveUserId(request, explicit);
     if (!userId || error) {
+      console.warn("[get-profile:PUT] Unauthorized", { error, explicit });
       return NextResponse.json(
         { success: false, message: error || "Unauthorized" },
         { status: 401 }
@@ -60,6 +61,7 @@ export async function PUT(request: Request) {
     }
 
     if (!mongoose.isValidObjectId(userId)) {
+      console.warn("[get-profile:PUT] Invalid user id", { userId });
       return NextResponse.json(
         { success: false, message: "Invalid user id" },
         { status: 400 }
@@ -74,6 +76,7 @@ export async function PUT(request: Request) {
     const companyName = String(profile.companyName || "").trim();
 
     if (!ALLOWED_USER_TYPES.has(userType)) {
+      console.warn("[get-profile:PUT] Invalid userType", { userType });
       return NextResponse.json(
         { success: false, message: "Invalid userType" },
         { status: 400 }
@@ -83,6 +86,10 @@ export async function PUT(request: Request) {
     let organizationId: mongoose.Types.ObjectId | null = null;
     if (userType === "organization_employee") {
       if (!organizationIdRaw || !mongoose.isValidObjectId(organizationIdRaw)) {
+        console.warn("[get-profile:PUT] Organization selection required", {
+          userType,
+          organizationIdRaw,
+        });
         return NextResponse.json(
           { success: false, message: "Organization selection required" },
           { status: 400 }
@@ -93,6 +100,9 @@ export async function PUT(request: Request) {
         userType: "organization",
       }).select({ _id: 1, companyName: 1 });
       if (!org || !org.companyName) {
+        console.warn("[get-profile:PUT] Selected organization not found", {
+          organizationIdRaw,
+        });
         return NextResponse.json(
           { success: false, message: "Selected organization not found" },
           { status: 400 }
@@ -103,18 +113,31 @@ export async function PUT(request: Request) {
 
     if (userType === "organization") {
       if (!companyName) {
+        console.warn("[get-profile:PUT] Organization name required", { userType });
         return NextResponse.json(
           { success: false, message: "Organization name required" },
           { status: 400 }
         );
       }
       if (companyName.length > 120) {
+        console.warn("[get-profile:PUT] Organization name too long", {
+          len: companyName.length,
+        });
         return NextResponse.json(
           { success: false, message: "Organization name too long" },
           { status: 400 }
         );
       }
     }
+
+    console.log("[get-profile:PUT] Update", {
+      userId,
+      userType,
+      organizationIdRaw: organizationIdRaw || null,
+      companyName: companyName || null,
+      hasProfilePic: Boolean(profile.profilePic),
+      hasCompanyLogo: Boolean(profile.companyLogo),
+    });
 
     const update: Record<string, unknown> = {
       userType,

@@ -9,7 +9,8 @@ export async function GET() {
       userType: "organization",
       companyName: { $exists: true, $ne: "" },
     })
-      .select({ _id: 1, companyName: 1, phone: 1, city: 1, state: 1 })
+      // Do not expose organization phone in public pickers.
+      .select({ _id: 1, companyName: 1, city: 1, state: 1 })
       .sort({ companyName: 1 })
       .limit(500);
 
@@ -18,11 +19,11 @@ export async function GET() {
       organizations: orgs.map((o) => ({
         id: String(o._id),
         name: String(o.companyName || ""),
-        phone: String(o.phone || ""),
         city: String(o.city || ""),
         state: String(o.state || ""),
         // Helps disambiguate same-named organizations in UI lists.
-        label: `${String(o.companyName || "").trim()}${o.phone ? ` • ${String(o.phone)}` : ""}${
+        // NOTE: Do not show organization phone in selection UI (privacy). Use location + short id.
+        label: `${String(o.companyName || "").trim()}${
           o.city || o.state
             ? ` • ${[String(o.city || "").trim(), String(o.state || "").trim()]
                 .filter(Boolean)
